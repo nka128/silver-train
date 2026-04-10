@@ -1,0 +1,9 @@
+[nordvpn]
+name=NordVPN
+baseurl=https://repo.nordvpn.com/yum/nordvpn/centos/x86_64
+enabled=1
+type=rpm
+repo_gpgcheck=0
+gpgcheck=1
+gpgkey=https://repo.nordvpn.com/gpg/nordvpn_public.asc
+
