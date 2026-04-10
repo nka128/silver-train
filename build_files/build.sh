@@ -2,6 +2,9 @@
 
 set -ouex pipefail
 
+# Co-located assets (e.g. .repo files): path is independent of WORKDIR and Containerfile mount target.
+BUILD_FILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 ### Install packages
 
 # Packages can be installed from any enabled yum repo on the image.
@@ -13,7 +16,7 @@ set -ouex pipefail
 #dnf5 install -y tmux 
 
 # add Nordvpn repo and install nordvpn
-dnf5 config-manager addrepo --from-repofile=nordvpn.repo
+dnf5 config-manager addrepo --from-repofile="${BUILD_FILES_DIR}/nordvpn.repo"
 dnf5 install -y nordvpn-gui
 # Use a COPR Example:
 #
