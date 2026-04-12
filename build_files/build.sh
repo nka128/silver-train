@@ -33,5 +33,6 @@ dnf5 install -y nordvpn-gui
 # Copy system files to the image
 rsync -a /ctx/system_files/ /
 # Enable NordVPN daemon and group service
-systemctl enable nordvpnd
 systemctl enable nordvpn-group.service
+systemctl enable nordvpnd.socket
+systemctl enable nordvpnd.service

@@ -1,14 +1,16 @@
 [Unit]
 Description=Add wheel members to nordvpn group
+DefaultDependencies=no
+After=local-fs.target
+Before=nordvpnd.socket nordvpnd.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-After=local-fs.target
 ExecStart=/usr/bin/nordvpn-group
 Restart=on-failure
 RestartSec=30
 StartLimitInterval=0
 
 [Install]
-WantedBy=default.target
+WantedBy=sockets.target

@@ -8,11 +8,10 @@ set -euo pipefail
 # Wheel membership can change after first boot (e.g. new admins). Exiting early
 # after a one-time stamp would skip usermod for users added to wheel later.
 #
-# Safe to run every boot: append_group only appends the nordvpn line to
-# /etc/group if it is missing; usermod -aG only appends supplementary groups
-# and does not duplicate membership when the user is already in nordvpn.
-# 
-# The dx-groups setup may bump the version number somewhere, but I couldn't find it.
+# Safe to run every boot: ensure_group uses groupadd when the group is missing
+# (NordVPN docs; the RPM does not ship a static line in /usr/lib/group). usermod -aG
+# only appends supplementary groups and does not duplicate membership when the user
+# is already in nordvpn.
 # -----------------------------------------------------------------------------
 
 # # SCRIPT VERSION — disabled; see comment block above
@@ -32,17 +31,16 @@ mkdir -p /etc/ublue
 #   exit 0
 # fi
 
-# Function to append a group entry to /etc/group
-append_group() {
+ensure_group() {
   local group_name="$1"
-  if ! grep -q "^$group_name:" /etc/group; then
-    echo "Appending $group_name to /etc/group"
-    grep "^$group_name:" /usr/lib/group | tee -a /etc/group >/dev/null
+  if getent group "$group_name" &>/dev/null; then
+    return 0
   fi
+  echo "Creating group $group_name"
+  groupadd "$group_name"
 }
 
-# Setup Groups
-append_group nordvpn
+ensure_group nordvpn
 
 wheelarray=($(getent group wheel | cut -d ":" -f 4 | tr ',' '\n'))
 for user in "${wheelarray[@]}"; do
