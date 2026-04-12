@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# No early-exit / version stamp (unlike Universal Blue dx image group helpers).
+#
+# Wheel membership can change after first boot (e.g. new admins). Exiting early
+# after a one-time stamp would skip usermod for users added to wheel later.
+#
+# Safe to run every boot: append_group only appends the nordvpn line to
+# /etc/group if it is missing; usermod -aG only appends supplementary groups
+# and does not duplicate membership when the user is already in nordvpn.
+# 
+# The dx-groups setup may bump the version number somewhere, but I couldn't find it.
+# -----------------------------------------------------------------------------
+
+# # SCRIPT VERSION — disabled; see comment block above
+# GROUP_SETUP_VER=1
+# GROUP_SETUP_VER_FILE="/etc/ublue/nordvpn-group"
+# GROUP_SETUP_VER_RAN=""
+# if [[ -f "$GROUP_SETUP_VER_FILE" ]]; then
+#   GROUP_SETUP_VER_RAN=$(cat "$GROUP_SETUP_VER_FILE")
+# fi
+
+# make the directory if it doesn't exist
+mkdir -p /etc/ublue
+
+# # Run script if updated
+# if [[ -f "$GROUP_SETUP_VER_FILE" && "$GROUP_SETUP_VER" = "$GROUP_SETUP_VER_RAN" ]]; then
+#   echo "NordVPN group setup has already run. Exiting..."
+#   exit 0
+# fi
+
+# Function to append a group entry to /etc/group
+append_group() {
+  local group_name="$1"
+  if ! grep -q "^$group_name:" /etc/group; then
+    echo "Appending $group_name to /etc/group"
+    grep "^$group_name:" /usr/lib/group | tee -a /etc/group >/dev/null
+  fi
+}
+
+# Setup Groups
+append_group nordvpn
+
+wheelarray=($(getent group wheel | cut -d ":" -f 4 | tr ',' '\n'))
+for user in "${wheelarray[@]}"; do
+  [[ -n "$user" ]] || continue
+  usermod -aG nordvpn "$user"
+done
+
+# # Prevent future executions (tied to disabled GROUP_SETUP_VER stamp)
+# echo "Writing state file"
+# echo "$GROUP_SETUP_VER" >"$GROUP_SETUP_VER_FILE"

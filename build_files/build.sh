@@ -5,6 +5,8 @@ set -ouex pipefail
 # Co-located assets (e.g. .repo files): path is independent of WORKDIR and Containerfile mount target.
 BUILD_FILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+
+
 ### Install packages
 
 # Packages can be installed from any enabled yum repo on the image.
@@ -27,3 +29,9 @@ dnf5 install -y nordvpn-gui
 
 #### Example for enabling a System Unit File
 #systemctl enable podman.socket
+
+# Copy system files to the image
+rsync -a /ctx/system_files/ /
+# Enable NordVPN daemon and group service
+systemctl enable nordvpnd
+systemctl enable nordvpn-group.service

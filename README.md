@@ -1,3 +1,57 @@
+# silver-train
+
+**silver-train** is a custom [bootc](https://github.com/bootc-dev/bootc) OCI image based on [**Bluefin DX**](https://github.com/ublue-os/bluefin) (`ghcr.io/ublue-os/bluefin-dx:stable`). It adds the **NordVPN** vendor repository and installs **`nordvpn-gui`**, with systemd integration so the daemon starts on boot and **`wheel`** users receive the **`nordvpn`** group needed for the client.
+
+The repository derives from the [Universal Blue image template](https://github.com/ublue-os/image-template). The following sections document **how this image differs** from that template and from stock Bluefin DX. For cosign setup, GitHub Actions, disk images, and `just` commands, open the **collapsed upstream instructions** at the end of this file.
+
+## Compared to upstream
+
+### Base image
+
+| | Universal Blue template (typical) | silver-train |
+|---|-----------------------------------|--------------|
+| `FROM` in [Containerfile](./Containerfile) | You choose the base | `ghcr.io/ublue-os/bluefin-dx:stable` |
+| Default OCI name in [Justfile](./Justfile) | `image-template` | `silver-train` (`IMAGE_NAME`) |
+
+### Files and behavior
+
+- **[Containerfile](./Containerfile)** — The build context stage copies **`build_files`** and **`system_files`** to `/build_files` and `/system_files` on the ctx image. On top of Bluefin DX, **`/opt` is replaced with a normal directory** (`RUN rm /opt && mkdir /opt`) so RPMs that install under `/opt` (including **`nordvpn-gui`**) can unpack during `podman build`. **`bootc container lint`** still runs at the end, matching template practice.
+- **[build_files/build.sh](./build_files/build.sh)** — Registers NordVPN’s repo from [build_files/nordvpn.repo](./build_files/nordvpn.repo), runs **`dnf5 install -y nordvpn-gui`**, merges [system_files](./system_files/) into the rootfs with **`rsync -a /ctx/system_files/ /`**, then **`systemctl enable nordvpnd`** and **`systemctl enable nordvpn-group.service`**.
+- **[build_files/nordvpn.repo](./build_files/nordvpn.repo)** — Vendor `.repo` file (base URLs and GPG settings live there; use of NordVPN is subject to their terms).
+- **[system_files/usr/bin/nordvpn-group](./system_files/usr/bin/nordvpn-group)** — Ensures the **`nordvpn` group** exists in **`/etc/group`** (from **`/usr/lib/group`** if missing), then **`usermod -aG nordvpn`** for each **`wheel`** member. **No version stamp or early exit**: the job runs whenever the unit starts (e.g. each boot), so **admins added to `wheel` later** still get the group. **`append_group`** and **`usermod -aG`** are idempotent; rationale is in the script header.
+- **[system_files/usr/lib/systemd/system/nordvpn-group.service](./system_files/usr/lib/systemd/system/nordvpn-group.service)** — **`Type=oneshot`**, **`RemainAfterExit=yes`**, **`After=local-fs.target`**, **`ExecStart=/usr/bin/nordvpn-group`**.
+
+## Tradeoffs: `/opt` on Fedora / bootc-style images
+
+Many Fedora and Atomic/bootc images ship **`/opt` as a symlink to `/var/opt`**. That keeps data written under `/opt` on **mutable `/var`**, which often survives **`bootc` image switches** more predictably for some third-party apps.
+
+**silver-train** uses a **real `/opt` directory baked into the image** so **`nordvpn-gui`** (and similar RPMs with payloads under `/opt`) can **install during the container build**.
+
+**Downside:** Software that assumes **`/opt` is writable state on `/var`** may break or lose data across upgrades. The [Containerfile](./Containerfile) calls out **Google Chrome** and **Docker Desktop** as examples. Mitigations include Flatpak or other install paths, or maintaining a fork with a different `/opt` strategy if you need those tools alongside NordVPN’s RPM layout.
+
+## Operator and end-user notes
+
+- After **`nordvpn-group.service`** has run, **log out and back in** (or **reboot**) so the session picks up the **`nordvpn`** supplementary group for **`wheel`** users.
+- **NordVPN** is third-party: you are responsible for **accounts, licensing, and compliance** with NordVPN’s terms.
+- If the VPN daemon or socket fails, check **`journalctl -u nordvpnd`** and any **`nordvpn.socket`** (or related) units shipped by the package.
+
+## What is largely unchanged from the template
+
+- **GitHub Actions** for build and signing ([.github/workflows/build.yml](./.github/workflows/build.yml)), optional disk/ISO workflows ([.github/workflows/build-disk.yml](./.github/workflows/build-disk.yml)), and **cosign** requirements.
+- **`bootc container lint`** in the Containerfile.
+- **Justfile** layout for local builds and VMs (this repo’s defaults appear in the [Justfile](./Justfile); legacy docs below still describe generic template defaults where they differ).
+
+## References
+
+- [Universal Blue image template](https://github.com/ublue-os/image-template)
+- [Universal Blue packages / Bluefin](https://github.com/orgs/ublue-os/packages)
+- [bootc](https://github.com/bootc-dev/bootc)
+
+---
+
+<details>
+<summary>Upstream Universal Blue image template instructions</summary>
+
 # image-template
 
 This repository is meant to be a template for building your own custom [bootc](https://github.com/bootc-dev/bootc) image. This template is the recommended way to make customizations to any image published by the Universal Blue Project.
@@ -64,7 +118,7 @@ Next, you need to add the key to GitHub. This makes use of GitHub's secret signi
 
 Go to your repository settings, under `Secrets and Variables` -> `Actions`
 ![image](https://user-images.githubusercontent.com/1264109/216735595-0ecf1b66-b9ee-439e-87d7-c8cc43c2110a.png)
-Add a new secret and name it `SIGNING_SECRET`, then paste the contents of `cosign.key` into the secret and save it. Make sure it's the .key file and not the .pub file. Once done, it should look like this:
+Add a new secret and name it `SIGNING_SECRET`, then paste the contents of `cosign.key` into the secret and save. Make sure it's the .key file and not the .pub file. Once done, it should look like this:
 ![image](https://user-images.githubusercontent.com/1264109/216735690-2d19271f-cee2-45ac-a039-23e6a4c16b34.png)
 </details>
 <details>
@@ -262,3 +316,5 @@ These are images derived from this template (or similar enough to this template)
 - [Homer](https://github.com/bketelsen/homer/)
 - [Amy OS](https://github.com/astrovm/amyos)
 - [VeneOS](https://github.com/Venefilyn/veneos)
+
+</details>
